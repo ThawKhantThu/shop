@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Vending Machine — Final</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+            background: #f3f6f9;
+        }
+
+        .vm-screen {
+            min-height: 72px;
+            box-shadow: inset 0 2px 6px rgba(0, 0, 0, .06);
+            border-radius: 12px;
+        }
+
+        .item-card {
+            transition: transform .12s ease, box-shadow .12s ease;
+            cursor: pointer;
+            background: #fff;
+            border-radius: 12px;
+            padding: 12px;
+            border: 1px solid #e6e9ee;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 150px;
+        }
+
+        .item-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, .08);
+        }
+
+        .out-of-stock {
+            opacity: .5;
+            cursor: not-allowed;
+            background: #f0f0f0;
+        }
+
+        .cart-qty {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #ef4444;
+            color: white;
+            width: 22px;
+            height: 22px;
+            border-radius: 999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: .75rem;
+        }
+
+        .modal-backdrop {
+            background: rgba(0, 0, 0, 0.6);
+        }
+
+        pre.receipt {
+            background: #fff;
+            border: 1px dashed #e5e7eb;
+            padding: 12px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+
+        @media (max-width: 768px) {
+            .item-card {
+                height: 140px;
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+
+<body class="p-4 md:p-6">
+
+    <div class="max-w-6xl mx-auto">
+
+        <!-- HEADER -->
+        <header
+            class="bg-white rounded-xl shadow p-4 mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+                <h1 id="titleMain" class="text-2xl font-bold">Vending Machine — Euro</h1>
+                <p id="subtitleMain" class="text-sm text-gray-600">Machine: VM-102 — Cafeteria Building A</p>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button id="langBtn" class="px-3 py-1 rounded bg-gray-100 text-sm">DE</button>
+                <button id="adminBtn" class="px-3 py-1 rounded bg-gray-900 text-white text-sm">Admin</button>
+            </div>
+        </header>
+
+        <!-- GRID -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- Left: Items and Display (col 1-2) -->
+            <section class="lg:col-span-2 space-y-4">
+                <div id="vmDisplay" class="vm-screen bg-gray-900 text-white p-4 flex items-center justify-between">
+                    <div id="displayMessage" class="font-mono">Welcome! Select items to add to your order.</div>
+                    <div id="displayPrice" class="text-xl font-bold text-green-300">€ 0.00</div>
+                </div>
+
+                <div>
+                    <h2 id="productsTitle" class="text-lg font-semibold text-gray-700 mb-3">Available Products</h2>
+                    <div id="itemGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-4"></div>
+                </div>
+            </section>
+
+            <!-- Right: Cart & Payment (col 3) -->
+            <aside class="bg-white p-4 rounded-xl shadow sticky top-6">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 id="cartTitle" class="text-lg font-semibold text-gray-700">Your Order</h3>
+                    <button id="clearAllBtn" class="text-xs text-red-600 hover:underline">Clear All</button>
+                </div>
+
+                <div id="cartSummary" class="min-h-[120px] p-3 bg-gray-50 rounded border mb-4 text-sm">
+                    <p class="text-center text-gray-500 py-6">Your cart is empty. Click a product to add.</p>
+                </div>
+
+                <!-- Discount / Tax toggles -->
+                <div class="text-sm text-gray-700 mb-3 space-y-2">
+                    <label class="flex items-center gap-2"><input id="applyDiscount" type="checkbox"
+                            class="form-checkbox h-4 w-4" /> <span id="lblApplyDiscount">Apply 10% Discount
+                            (test)</span></label>
+                    <label class="flex items-center gap-2"><input id="applyTax" type="checkbox"
+                            class="form-checkbox h-4 w-4" /> <span id="lblApplyTax">Apply 10% Tax (VAT)
+                            (test)</span></label>
+
+                    <div class="flex justify-between"><span id="subtotalLabel">Subtotal:</span><span
+                            id="subtotalValue">€ 0.00</span></div>
+                    <div class="flex justify-between text-red-600"><span id="discountLabel">Discount:</span><span
+                            id="discountValue">- € 0.00</span></div>
+                    <div class="flex justify-between text-blue-600"><span id="taxLabel">Tax:</span><span id="taxValue">+
+                            € 0.00</span></div>
+                    <div class="flex justify-between pt-2 border-t-2 border-gray-100 text-xl font-bold text-gray-800">
+                        <span id="totalLabel">TOTAL DUE:</span><span id="totalValue">€ 0.00</span></div>
+                </div>
+
+                <!-- Payment -->
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Customer pays (€)</label>
+                    <input id="cashInput" type="number" min="0" step="0.01" class="w-full p-2 rounded border mb-3"
+                        placeholder="e.g. 20.00" disabled />
+                    <div class="space-y-2">
+                        <button id="payBtn" class="w-full p-3 bg-blue-600 text-white rounded font-bold" disabled>Pay &
+                            Complete</button>
+                        <button id="resetCartBtn" class="w-full p-2 bg-red-500 text-white rounded" disabled>Reset
+                            Cart</button>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- Status -->
+        <div id="statusArea" class="mt-6 hidden"></div>
+
+        <!-- Receipt Preview (under cart/status) -->
+        <section id="receiptPreviewWrap" class="mt-6 hidden">
+            <h3 id="receiptTitle" class="text-lg font-semibold text-gray-700 mb-2">RECEIPT</h3>
+            <div class="bg-white rounded-xl p-4 shadow">
+                <pre id="receiptContent" class="receipt"></pre>
+                <div class="mt-3 flex gap-2">
+                    <button id="downloadReceiptBtn" class="px-3 py-2 bg-gray-100 rounded">Download</button>
+                    <button id="copyReceiptBtn" class="px-3 py-2 bg-gray-100 rounded">Copy</button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- ADMIN PIN MODAL -->
+    <div id="adminModal" class="fixed inset-0 hidden items-center justify-center z-50">
+        <div class="modal-backdrop absolute inset-0"></div>
+        <div class="relative bg-white rounded-xl shadow-xl w-full max-w-3xl p-5 z-10">
+            <div class="flex items-start justify-between mb-4">
+                <div>
+                    <h2 class="text-xl font-bold">Admin (PIN required)</h2>
+                    <p class="text-xs text-gray-500">Enter admin PIN to access controls</p>
+                </div>
+                <div><button id="adminCloseBtn" class="px-3 py-1 bg-gray-100 rounded">Close</button></div>
+            </div>
+
+            <!-- PIN entry -->
+            <div id="adminLoginArea" class="mb-4">
+                <label class="text-xs text-gray-600">PIN</label>
+                <div class="flex gap-2 mt-2">
+                    <input id="adminPinInput" type="password" class="p-2 border rounded flex-1" placeholder="Enter PIN">
+                    <button id="adminPinSubmit" class="px-3 py-2 bg-green-600 text-white rounded">Enter</button>
+                </div>
+                <p id="adminLoginMsg" class="text-sm text-red-500 mt-2"></p>
+            </div>
+
+            <!-- Admin controls (hidden until PIN) -->
+            <div id="adminControls" class="hidden space-y-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex gap-2">
+                        <button id="openAddItemBtn" class="px-3 py-2 bg-indigo-600 text-white rounded">Add Item</button>
+                        <button id="exportSalesBtn" class="px-3 py-2 bg-gray-100 rounded">Export Sales</button>
+                    </div>
+                    <div class="text-sm text-gray-600">Transactions: <span id="adminTxCount">0</span></div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-gray-50 p-3 rounded border">
+                        <h4 class="font-semibold mb-2">Inventory</h4>
+                        <div id="adminInventoryList" class="text-sm max-h-64 overflow-y-auto"></div>
+                    </div>
+
+                    <div class="bg-gray-50 p-3 rounded border">
+                        <h4 class="font-semibold mb-2">Sales Records</h4>
+                        <div id="adminSalesList" class="text-sm max-h-64 overflow-y-auto"></div>
+                    </div>
+                </div>
+
+                <div class="flex gap-3 items-center">
+                    <label class="flex items-center gap-2"><input id="adminDefaultDiscount" type="checkbox"
+                            class="form-checkbox" /> Default 10% Discount</label>
+                    <label class="flex items-center gap-2"><input id="adminDefaultTax" type="checkbox"
+                            class="form-checkbox" /> Default 10% Tax</label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ITEM MODAL -->
+    <div id="itemModal" class="fixed inset-0 hidden items-center justify-center z-40">
+        <div class="modal-backdrop absolute inset-0"></div>
+        <div class="relative bg-white rounded-xl shadow p-6 w-full max-w-md z-10">
+            <h3 id="itemModalTitle" class="text-lg font-semibold mb-3">Add Item</h3>
+            <form id="itemForm" class="space-y-3">
+                <div>
+                    <label class="text-xs text-gray-600">Item ID</label>
+                    <input id="itemIdInput" class="w-full p-2 border rounded" maxlength="6" required />
+                </div>
+                <div>
+                    <label class="text-xs text-gray-600">Name</label>
+                    <input id="itemNameInput" class="w-full p-2 border rounded" required />
+                </div>
+                <div class="flex gap-2">
+                    <div class="flex-1">
+                        <label class="text-xs text-gray-600">Type</label>
+                        <select id="itemTypeInput" class="w-full p-2 border rounded">
+                            <option>Drink</option>
+                            <option>Snack</option>
+                            <option>Food</option>
+                            <option>Other</option>
+                        </select>
+                    </div>
+                    <div class="w-1/2">
+                        <label class="text-xs text-gray-600">Price (€)</label>
+                        <input id="itemPriceInput" type="number" min="0" step="0.01" class="w-full p-2 border rounded"
+                            required />
+                    </div>
+                    <div class="w-1/2">
+                        <label class="text-xs text-gray-600">Stock</label>
+                        <input id="itemStockInput" type="number" min="0" class="w-full p-2 border rounded" required />
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2">
+                    <button type="button" id="itemModalCancel" class="px-3 py-2 bg-gray-200 rounded">Cancel</button>
+                    <button type="submit" id="itemModalSave"
+                        class="px-3 py-2 bg-indigo-600 text-white rounded">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        /* -----------------------
+           Config & formatting
+        -------------------------*/
+        const ADMIN_PIN = '1234';
+        let currentLang = 'en'; // 'en' or 'de'
+
+        const LANG = {
+            en: {
+                welcome: "Welcome! Select items to add to your order.",
+                emptyCart: "Your cart is empty. Click a product to add.",
+                cancelOne: "Cancel 1",
+                clearAll: "Clear All",
+                applyDiscount: "Apply 10% Discount (test)",
+                applyTax: "Apply 10% Tax (VAT) (test)",
+                needsMore: "Insufficient — need € ",
+                successChange: "SUCCESS! Change € ",
+                receiptTitle: "RECEIPT",
+                thankYou: "Thank you!"
+            },
+            de: {
+                welcome: "Willkommen! Produkte zum Warenkorb hinzufügen.",
+                emptyCart: "Ihr Warenkorb ist leer. Produkt anklicken, um hinzuzufügen.",
+                cancelOne: "Eins entfernen",
+                clearAll: "Alles löschen",
+                applyDiscount: "10% Rabatt anwenden (Test)",
+                applyTax: "10% MwSt. anwenden (Test)",
+                needsMore: "Unzureichend — benötigt € ",
+                successChange: "ERFOLG! Rückgeld € ",
+                receiptTitle: "KASSENBELEG",
+                thankYou: "Vielen Danke!"
+            }
+        };
+
+        function t(key) { return LANG[currentLang][key] ?? key; }
+
+        const euroFmt = (v) => {
+            try {
+                return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(v);
+            } catch (e) {
+                return '€ ' + Number(v).toFixed(2);
+            }
+        };
+
+        /* -----------------------
+           Models
+        -------------------------*/
+        class Item { constructor(id, name, type, price, stock) { this.id = id.toString().toUpperCase(); this.name = name; this.type = type; this.price = Number(price); this.stock = Number(stock); } isAvailable() { return this.stock > 0; } }
+        class VendingMachine {
+            constructor() {
+                this.inventory = {
+                    'D1': new Item('D1', 'Coca-Cola', 'Drink', 2.00, 10),
+                    'D2': new Item('D2', 'Pepsi Max', 'Drink', 2.10, 8),
+                    'S1': new Item('S1', "Lay's Chips", 'Snack', 1.50, 6),
+                    'F1': new Item('F1', 'Hot Dog Bun', 'Food', 3.50, 4),
+                    'F2': new Item('F2', 'Onigiri', 'Food', 3.20, 6),
+                    'C1': new Item('C1', 'Iced Coffee', 'Drink', 2.80, 12)
+                };
+                this.cart = {}; // id: qty
+                this.sales = [];
+                this.discountRate = 0.10;
+                this.taxRate = 0.10;
+                this.adminDefaultDiscount = false;
+                this.adminDefaultTax = false;
+                this.lastReceipt = null;
+            }
+
+            getItem(id) { return this.inventory[id]; }
+            addToCart(id) {
+                const it = this.getItem(id); if (!it || it.stock <= 0) return false; const q = this.cart[id] || 0; if (q < it.stock) { this.cart[id] = q + 1; return true; } return false;
+            }
+            cancelOne(id) { if (!this.cart[id]) return; this.cart[id] -= 1; if (this.cart[id] <= 0) delete this.cart[id]; }
+            clearCart() { this.cart = {}; }
+            calculateTotals({ applyDiscount = false, applyTax = false } = {}) {
+                let subtotal = 0, items = 0;
+                for (const [id, q] of Object.entries(this.cart)) { const it = this.getItem(id); if (it) { subtotal += it.price * q; items += q; } }
+                const discount = applyDiscount ? Math.round((subtotal * this.discountRate + Number.EPSILON) * 100) / 100 : 0;
+                const taxableBase = subtotal - discount;
+                const tax = applyTax ? Math.round((taxableBase * this.taxRate + Number.EPSILON) * 100) / 100 : 0;
+                const total = Math.round((taxableBase + tax + Number.EPSILON) * 100) / 100;
+                return { subtotal, discount, tax, total, items };
+            }
+            purchase({ cash = 0, applyDiscount = false, applyTax = false } = {}) {
+                const totals = this.calculateTotals({ applyDiscount, applyTax });
+                if (totals.items === 0) return { error: 'empty' };
+                if (cash < totals.total) return { error: 'insufficient', needed: Math.round((totals.total - cash + Number.EPSILON) * 100) / 100 };
+                const items = [];
+                for (const [id, q] of Object.entries(this.cart)) {
+                    const it = this.getItem(id); if (!it || it.stock < q) return { error: 'stock' }; it.stock -= q; items.push({ id: id, name: it.name, qty: q, price: it.price });
+                }
+                const now = new Date();
+                const receipt = {
+                    transaction_id: String(this.sales.length + 1).padStart(8, '0'),
+                    date: now.toLocaleDateString(),
+                    time: now.toLocaleTimeString(),
+                    items,
+                    subtotal: totals.subtotal,
+                    discount: totals.discount,
+                    tax: totals.tax,
+                    total: totals.total,
+                    payment: cash,
+                    change: Math.round((cash - totals.total + Number.EPSILON) * 100) / 100
+                };
+                this.sales.push(receipt);
+                this.lastReceipt = receipt;
+                this.cart = {};
+                return { receipt };
+            }
+            // admin
+            addItem(item) { const id = item.id.toString().toUpperCase(); if (this.inventory[id]) return false; this.inventory[id] = new Item(id, item.name, item.type, item.price, item.stock); return true; }
+            editItem(item) { const id = item.id.toString().toUpperCase(); if (!this.inventory[id]) return false; const it = this.inventory[id]; it.name = item.name; it.type = item.type; it.price = Number(item.price); it.stock = Number(item.stock); return true; }
+            deleteItem(id) { if (this.inventory[id]) { delete this.inventory[id]; return true; } return false; }
+        }
+
+        const vm = new VendingMachine();
+
+        /* -----------------------
+           UI rendering
+        -------------------------*/
+        function emojiForType(t) { if (t === 'Drink') return '🥤'; if (t === 'Snack') return '🥨'; if (t === 'Food') return '🍱'; return '🎁'; }
+
+        function renderItems() {
+            const grid = document.getElementById('itemGrid');
+            const items = Object.values(vm.inventory).sort((a, b) => a.id.localeCompare(b.id));
+            let html = '';
+            for (const it of items) {
+                const qtyInCart = vm.cart[it.id] || 0;
+                const out = it.isAvailable() ? '' : 'out-of-stock';
+                html += `
+      <div class="${out}" style="position:relative;">
+        <div class="item-card" data-id="${it.id}">
+          ${qtyInCart > 0 ? `<div class="cart-qty">${qtyInCart}</div>` : ''}
+          <div class="text-3xl text-center mb-2">${emojiForType(it.type)}</div>
+          <div class="font-semibold text-gray-800">${it.name}</div>
+          <div class="text-xs text-gray-500">${it.id}</div>
+          <div class="flex justify-between mt-3">
+            <div class="text-green-600 font-bold">${euroFmt(it.price)}</div>
+            <div class="${it.isAvailable() ? 'text-gray-500' : 'text-red-500 font-bold'} text-xs">Stock: ${it.stock}</div>
+          </div>
+        </div>
+      </div>`;
+            }
+            grid.innerHTML = html;
+
+            grid.querySelectorAll('.item-card').forEach(el => {
+                const id = el.getAttribute('data-id');
+                el.onclick = () => {
+                    if (vm.addToCart(id)) { renderCart(); renderItems(); updateDisplay(`${vm.getItem(id).name} added.`, vm.calculateTotals({ applyDiscount: applyDiscountChecked(), applyTax: applyTaxChecked() }).total); }
+                    else updateDisplay('Item not available', 0, true);
+                };
+            });
+        }
+
+        function applyDiscountChecked() { return document.getElementById('applyDiscount').checked || vm.adminDefaultDiscount; }
+        function applyTaxChecked() { return document.getElementById('applyTax').checked || vm.adminDefaultTax; }
+
+        function renderCart() {
+            const container = document.getElementById('cartSummary');
+            const calc = vm.calculateTotals({ applyDiscount: applyDiscountChecked(), applyTax: applyTaxChecked() });
+            document.getElementById('subtotalValue').textContent = euroFmt(calc.subtotal);
+            document.getElementById('discountValue').textContent = '- ' + euroFmt(calc.discount);
+            document.getElementById('taxValue').textContent = '+ ' + euroFmt(calc.tax);
+            document.getElementById('totalValue').textContent = euroFmt(calc.total);
+
+            document.getElementById('cashInput').disabled = calc.items === 0;
+            document.getElementById('payBtn').disabled = calc.items === 0;
+            document.getElementById('resetCartBtn').disabled = calc.items === 0;
+            document.getElementById('clearAllBtn').disabled = calc.items === 0;
+
+            if (calc.items === 0) {
+                container.innerHTML = `<p class="text-center text-gray-500 py-8">${t('emptyCart')}</p>`;
+                return;
+            }
+
+            let rows = '<ul class="divide-y divide-gray-100">';
+            for (const [id, q] of Object.entries(vm.cart)) {
+                const it = vm.getItem(id);
+                rows += `
+      <li class="flex items-center justify-between py-2">
+        <div class="flex-1">
+          <div class="font-medium">${it.name}</div>
+          <div class="text-xs text-gray-500">${it.id} • ${q} × ${euroFmt(it.price)} = <span class="font-semibold">${euroFmt(it.price * q)}</span></div>
+        </div>
+        <div class="flex flex-col items-end gap-2 ml-3">
+          <button onclick="handleCancelOne('${id}')" class="px-2 py-1 bg-red-100 text-red-700 rounded text-xs">${t('cancelOne')}</button>
+        </div>
+      </li>
+    `;
+            }
+            rows += '</ul>';
+            container.innerHTML = rows;
+        }
+
+        function updateDisplay(msg, price = 0, isError = false) {
+            document.getElementById('displayMessage').textContent = msg;
+            document.getElementById('displayPrice').textContent = euroFmt(price);
+            const vmDisplay = document.getElementById('vmDisplay');
+            if (isError) { vmDisplay.classList.add('bg-red-700'); vmDisplay.classList.remove('bg-gray-900'); }
+            else { vmDisplay.classList.remove('bg-red-700'); vmDisplay.classList.add('bg-gray-900'); }
+        }
+
+        function showStatus(type, html) {
+            const s = document.getElementById('statusArea');
+            s.className = '';
+            if (type === 'error') s.classList.add('mt-6', 'p-4', 'bg-red-100', 'text-red-800', 'rounded');
+            else if (type === 'success') s.classList.add('mt-6', 'p-4', 'bg-green-100', 'text-green-800', 'rounded');
+            else s.classList.add('mt-6', 'p-4', 'bg-yellow-100', 'text-yellow-800', 'rounded');
+            s.innerHTML = html;
+            s.classList.remove('hidden');
+            setTimeout(() => { s.classList.add('hidden'); }, 7000);
+        }
+
+        /* -----------------------
+           Actions
+        -------------------------*/
+        function handleCancelOne(id) {
+            vm.cancelOne(id);
+            renderCart();
+            renderItems();
+            const it = vm.getItem(id);
+            updateDisplay('Removed one ' + (it ? it.name : id), vm.calculateTotals({ applyDiscount: applyDiscountChecked(), applyTax: applyTaxChecked() }).total);
+        }
+
+        function handleClearAll() { vm.clearCart(); renderCart(); updateDisplay('Cart cleared', 0); }
+        function handleResetCart() { vm.clearCart(); renderCart(); updateDisplay('Cart reset', 0); }
+
+        /* Pay flow */
+        function handlePay() {
+            const cash = Number(document.getElementById('cashInput').value) || 0;
+            const applyDiscount = applyDiscountChecked();
+            const applyTax = applyTaxChecked();
+            const result = vm.purchase({ cash, applyDiscount, applyTax });
+            if (result.error) {
+                if (result.error === 'empty') { showStatus('error', 'Cart is empty'); updateDisplay('Select items before purchasing', 0, true); }
+                else if (result.error === 'insufficient') { showStatus('error', t('needsMore') + result.needed.toFixed(2)); updateDisplay(t('needsMore') + result.needed.toFixed(2), vm.calculateTotals({ applyDiscount, applyTax }).total, true); }
+                else if (result.error === 'stock') { showStatus('error', 'Stock error — cannot complete'); updateDisplay('Stock error', 0, true); }
+                return;
+            }
+            const receipt = result.receipt;
+            // show receipt preview on main page
+            renderReceiptPreview(receipt);
+            // show success + change
+            showStatus('success', t('successChange') + receipt.change.toFixed(2));
+            updateDisplay('SUCCESS! Thank you', receipt.change, false);
+            // reset cash input and cart UI
+            document.getElementById('cashInput').value = '';
+            renderItems();
+            renderCart();
+        }
+
+        /* Receipt preview rendering (language aware) */
+        function renderReceiptPreview(receipt) {
+            const wrap = document.getElementById('receiptPreviewWrap');
+            const pre = document.getElementById('receiptContent');
+            const lines = [];
+            // Title in selected language
+            lines.push('       ' + (currentLang === 'en' ? 'RECEIPT' : 'KASSENBELEG'));
+            lines.push('           ----');
+            lines.push(`Date: ${receipt.date}    Time: ${receipt.time}`);
+            lines.push(`Transaction ID: ${receipt.transaction_id}`);
+            lines.push('-------------------------------');
+            lines.push((currentLang === 'en' ? 'Item                 Qty   Price' : 'Artikel              Menge  Preis'));
+            for (const it of receipt.items) {
+                const name = it.name.length > 18 ? it.name.slice(0, 18) : it.name.padEnd(18, ' ');
+                const qty = String(it.qty).padStart(3, ' ');
+                const price = (it.price * it.qty).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).padStart(7, ' ');
+                lines.push(`${name} ${qty} € ${price}`);
+            }
+            lines.push('-------------------------------');
+            // subtotals labels language-aware
+            if (currentLang === 'en') {
+                lines.push(`Subtotal:           € ${receipt.subtotal.toFixed(2)}`);
+                lines.push(`Discount (10%):     -€ ${receipt.discount.toFixed(2)}`);
+                lines.push(`Tax (10%):          +€ ${receipt.tax.toFixed(2)}`);
+                lines.push(`TOTAL DUE:          € ${receipt.total.toFixed(2)}`);
+                lines.push(`Payment:            € ${receipt.payment.toFixed(2)}`);
+                lines.push(`Change:             € ${receipt.change.toFixed(2)}`);
+                lines.push('-------------------------------');
+                lines.push('Thank you!');
+            } else {
+                lines.push(`Zwischensumme:      € ${receipt.subtotal.toFixed(2)}`);
+                lines.push(`Rabatt (10%):       -€ ${receipt.discount.toFixed(2)}`);
+                lines.push(`Steuer (10%):       +€ ${receipt.tax.toFixed(2)}`);
+                lines.push(`GESAMTBETRAG:       € ${receipt.total.toFixed(2)}`);
+                lines.push(`Bezahlt:            € ${receipt.payment.toFixed(2)}`);
+                lines.push(`Rückgeld:           € ${receipt.change.toFixed(2)}`);
+                lines.push('-------------------------------');
+                lines.push('Vielen Danke!');
+            }
+            pre.textContent = lines.join('\n');
+            wrap.classList.remove('hidden');
+            vm.lastReceipt = receipt;
+        }
+
+        /* copy & download */
+        function copyReceipt() {
+            const pre = document.getElementById('receiptContent');
+            navigator.clipboard.writeText(pre.textContent).then(() => { showStatus('success', 'Receipt copied to clipboard'); }).catch(() => { showStatus('error', 'Copy failed'); });
+        }
+        function downloadReceipt() {
+            if (!vm.lastReceipt) return;
+            const text = document.getElementById('receiptContent').textContent;
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = `receipt_${vm.lastReceipt.transaction_id}.txt`; document.body.appendChild(a); a.click(); a.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        /* -----------------------
+           Admin UI (PIN)
+        -------------------------*/
+        function openAdmin() {
+            document.getElementById('adminModal').classList.remove('hidden');
+            document.getElementById('adminLoginArea').classList.remove('hidden');
+            document.getElementById('adminControls').classList.add('hidden');
+            document.getElementById('adminPinInput').value = '';
+            document.getElementById('adminLoginMsg').textContent = '';
+        }
+        function closeAdmin() { document.getElementById('adminModal').classList.add('hidden'); }
+
+        document.getElementById('adminBtn').addEventListener('click', openAdmin);
+        document.getElementById('adminCloseBtn').addEventListener('click', closeAdmin);
+
+        document.getElementById('adminPinSubmit').addEventListener('click', () => {
+            const pin = document.getElementById('adminPinInput').value;
+            if (pin === ADMIN_PIN) {
+                document.getElementById('adminLoginArea').classList.add('hidden');
+                document.getElementById('adminControls').classList.remove('hidden');
+                renderAdminDashboard();
+            } else {
+                document.getElementById('adminLoginMsg').textContent = 'Incorrect PIN';
+            }
+        });
+
+        /* Admin rendering & actions */
+        function renderAdminDashboard() {
+            const inv = document.getElementById('adminInventoryList');
+            const items = Object.values(vm.inventory).sort((a, b) => a.id.localeCompare(b.id));
+            let html = '';
+            for (const it of items) {
+                html += `
+      <div class="flex items-center justify-between bg-white p-2 rounded shadow-sm mb-2">
+        <div>
+          <div class="font-semibold">${it.name} <span class="text-xs text-gray-400">(${it.id})</span></div>
+          <div class="text-xs text-gray-500">${it.type} • ${euroFmt(it.price)} • Stock: ${it.stock}</div>
+        </div>
+        <div class="flex gap-2">
+          <button class="px-2 py-1 text-xs bg-indigo-600 text-white rounded" onclick="openEditItem('${it.id}')">Edit</button>
+          <button class="px-2 py-1 text-xs bg-red-500 text-white rounded" onclick="confirmDeleteItem('${it.id}')">Delete</button>
+        </div>
+      </div>`;
+            }
+            inv.innerHTML = html;
+
+            const salesEl = document.getElementById('adminSalesList');
+            if (vm.sales.length === 0) salesEl.innerHTML = '<div class="text-sm text-gray-500">No sales yet.</div>';
+            else {
+                let shtml = '';
+                for (const r of vm.sales.slice().reverse()) {
+                    shtml += `
+        <div class="p-2 bg-white rounded shadow-sm text-sm mb-2">
+          <div class="flex justify-between items-center">
+            <div><strong>${r.date} ${r.time}</strong> <span class="text-xs text-gray-500">ID:${r.transaction_id}</span></div>
+            <div class="flex gap-2">
+              <button onclick="viewReceipt('${r.transaction_id}')" class="px-2 py-1 text-xs bg-gray-100 rounded">View</button>
+              <button onclick="downloadReceiptId('${r.transaction_id}')" class="px-2 py-1 text-xs bg-gray-100 rounded">Download</button>
+            </div>
+          </div>
+          <div class="text-xs text-gray-600 mt-1">Total: ${euroFmt(r.total)}</div>
+        </div>`;
+                }
+                salesEl.innerHTML = shtml;
+            }
+            document.getElementById('adminTxCount').textContent = vm.sales.length;
+            document.getElementById('adminDefaultDiscount').checked = vm.adminDefaultDiscount;
+            document.getElementById('adminDefaultTax').checked = vm.adminDefaultTax;
+        }
+
+        document.getElementById('openAddItemBtn').addEventListener('click', () => openItemModal('add', null));
+        document.getElementById('exportSalesBtn').addEventListener('click', () => {
+            const data = JSON.stringify(vm.sales, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'sales_export.json'; a.click(); URL.revokeObjectURL(url);
+        });
+
+        function openItemModal(mode, item) {
+            document.getElementById('itemModal').classList.remove('hidden');
+            document.getElementById('itemModalTitle').textContent = mode === 'add' ? 'Add New Item' : 'Edit Item';
+            document.getElementById('itemIdInput').disabled = (mode === 'edit');
+            if (mode === 'edit' && item) {
+                document.getElementById('itemIdInput').value = item.id;
+                document.getElementById('itemNameInput').value = item.name;
+                document.getElementById('itemTypeInput').value = item.type;
+                document.getElementById('itemPriceInput').value = item.price;
+                document.getElementById('itemStockInput').value = item.stock;
+            } else {
+                document.getElementById('itemForm').reset();
+                document.getElementById('itemIdInput').value = '';
+            }
+
+            const form = document.getElementById('itemForm');
+            form.onsubmit = (e) => {
+                e.preventDefault();
+                const id = document.getElementById('itemIdInput').value.trim().toUpperCase();
+                const name = document.getElementById('itemNameInput').value.trim();
+                const type = document.getElementById('itemTypeInput').value;
+                const price = Number(document.getElementById('itemPriceInput').value);
+                const stock = Number(document.getElementById('itemStockInput').value);
+                if (!id || !name || isNaN(price) || isNaN(stock)) { alert('Fill all fields'); return; }
+                if (document.getElementById('itemIdInput').disabled) {
+                    vm.editItem({ id, name, type, price, stock });
+                } else {
+                    if (!vm.addItem({ id, name, type, price, stock })) { alert('ID exists'); return; }
+                }
+                closeItemModal();
+                renderItems();
+                renderAdminDashboard();
+            };
+        }
+
+        function closeItemModal() { document.getElementById('itemModal').classList.add('hidden'); }
+        function openEditItem(id) { const it = vm.getItem(id); if (!it) return; openItemModal('edit', it); }
+        function confirmDeleteItem(id) { if (!confirm('Delete item ' + id + '?')) return; vm.deleteItem(id); renderItems(); renderAdminDashboard(); }
+        function viewReceipt(txId) { const r = vm.sales.find(x => x.transaction_id === txId); if (!r) return; renderReceiptPreview(r); window.scrollTo({ top: document.getElementById('receiptPreviewWrap').offsetTop - 20, behavior: 'smooth' }); }
+        function downloadReceiptId(txId) { const r = vm.sales.find(x => x.transaction_id === txId); if (!r) return; const text = buildReceiptText(r); const blob = new Blob([text], { type: 'text/plain' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `receipt_${txId}.txt`; a.click(); URL.revokeObjectURL(url); }
+        function buildReceiptText(receipt) { let text = ''; if (currentLang === 'en') { text += '       RECEIPT\n'; } else { text += '       KASSENBELEG\n'; } text += `Date: ${receipt.date}    Time: ${receipt.time}\n`; text += `Transaction ID: ${receipt.transaction_id}\n`; text += '-------------------------------\n'; text += (currentLang === 'en' ? 'Item                 Qty   Price\n' : 'Artikel              Menge  Preis\n'); for (const it of receipt.items) { const name = it.name.length > 18 ? it.name.slice(0, 18) : it.name.padEnd(18, ' '); const qty = String(it.qty).padStart(3, ' '); const price = (it.price * it.qty).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).padStart(7, ' '); text += `${name} ${qty} € ${price}\n`; } text += '-------------------------------\n'; if (currentLang === 'en') { text += `Subtotal:           € ${receipt.subtotal.toFixed(2)}\n`; text += `Discount (10%):     -€ ${receipt.discount.toFixed(2)}\n`; text += `Tax (10%):          +€ ${receipt.tax.toFixed(2)}\n`; text += `TOTAL DUE:          € ${receipt.total.toFixed(2)}\n`; text += `Payment:            € ${receipt.payment.toFixed(2)}\n`; text += `Change:             € ${receipt.change.toFixed(2)}\n`; text += '-------------------------------\n'; text += 'Thank you!\n'; } else { text += `Zwischensumme:      € ${receipt.subtotal.toFixed(2)}\n`; text += `Rabatt (10%):       -€ ${receipt.discount.toFixed(2)}\n`; text += `Steuer (10%):       +€ ${receipt.tax.toFixed(2)}\n`; text += `GESAMTBETRAG:       € ${receipt.total.toFixed(2)}\n`; text += `Bezahlt:            € ${receipt.payment.toFixed(2)}\n`; text += `Rückgeld:           € ${receipt.change.toFixed(2)}\n`; text += '-------------------------------\n'; text += 'Vielen Danke!\n'; } return text; }
+
+        /* -----------------------
+           Events & bindings
+        -------------------------*/
+        document.getElementById('applyDiscount').addEventListener('change', () => renderCart());
+        document.getElementById('applyTax').addEventListener('change', () => renderCart());
+        document.getElementById('clearAllBtn').addEventListener('click', handleClearAll);
+        document.getElementById('resetCartBtn').addEventListener('click', handleResetCart);
+        document.getElementById('payBtn').addEventListener('click', handlePay);
+        document.getElementById('copyReceiptBtn').addEventListener('click', copyReceipt);
+        document.getElementById('downloadReceiptBtn').addEventListener('click', downloadReceipt);
+        document.getElementById('adminDefaultDiscount').addEventListener('change', (e) => { vm.adminDefaultDiscount = e.target.checked; document.getElementById('applyDiscount').checked = vm.adminDefaultDiscount; renderCart(); });
+        document.getElementById('adminDefaultTax').addEventListener('change', (e) => { vm.adminDefaultTax = e.target.checked; document.getElementById('applyTax').checked = vm.adminDefaultTax; renderCart(); });
+
+        document.getElementById('langBtn').addEventListener('click', () => {
+            currentLang = currentLang === 'en' ? 'de' : 'en';
+            // update UI text
+            document.getElementById('productsTitle').textContent = currentLang === 'en' ? 'Available Products' : 'Verfügbare Produkte';
+            document.getElementById('cartTitle').textContent = currentLang === 'en' ? 'Your Order' : 'Ihre Bestellung';
+            document.getElementById('subtotalLabel').textContent = currentLang === 'en' ? 'Subtotal:' : 'Zwischensumme:';
+            document.getElementById('discountLabel').textContent = currentLang === 'en' ? 'Discount:' : 'Rabatt:';
+            document.getElementById('taxLabel').textContent = currentLang === 'en' ? 'Tax:' : 'MwSt.:';
+            document.getElementById('totalLabel').textContent = currentLang === 'en' ? 'TOTAL DUE:' : 'GESAMTBETRAG:';
+            document.getElementById('payBtn').textContent = currentLang === 'en' ? 'Pay & Complete' : 'Bezahlen & Abschließen';
+            document.getElementById('resetCartBtn').textContent = currentLang === 'en' ? 'Reset Cart' : 'Warenkorb zurücksetzen';
+            document.getElementById('clearAllBtn').textContent = currentLang === 'en' ? 'Clear All' : 'Alles löschen';
+            document.getElementById('lblApplyDiscount').textContent = t('applyDiscount');
+            document.getElementById('lblApplyTax').textContent = t('applyTax');
+            document.getElementById('receiptTitle').textContent = currentLang === 'en' ? t('receiptTitle') : t('receiptTitle');
+            renderCart();
+            renderItems();
+        });
+
+        /* Admin item modal bindings */
+        document.getElementById('itemModalCancel').addEventListener('click', closeItemModal);
+
+        /* initial render */
+        renderItems();
+        renderCart();
+        updateDisplay(t('welcome'), 0);
+
+        /* extra helpers for admin export / open add */
+        document.getElementById('openAddItemBtn')?.addEventListener('click', () => openItemModal('add', null));
+        document.getElementById('exportSalesBtn')?.addEventListener('click', () => {
+            const data = JSON.stringify(vm.sales, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'sales_export.json'; a.click(); URL.revokeObjectURL(url);
+        });
+
+        /* Allow Enter key for PIN */
+        document.getElementById('adminPinInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') document.getElementById('adminPinSubmit').click();
+        });
+
+        /* touch-friendly: improve small screens */
+        window.addEventListener('resize', () => { /* Tailwind handles responsive */ });
+
+    </script>
+</body>
+
+</html>
